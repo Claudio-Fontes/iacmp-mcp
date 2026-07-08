@@ -1,0 +1,22 @@
+{
+  "name": "@iacmp/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for iacmp — grounded IaC generation with validated examples",
+  "type": "module",
+  "bin": {
+    "iacmp-mcp": "./dist/server.js"
+  },
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/server.js stdio"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}
