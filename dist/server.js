@@ -2,47 +2,50 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { startTransport } from './transport/index.js';
-import { handleSearchExamples, handleGetExample, handleListExamples } from './tools/search-examples.js';
+import { handleSearchExamples, handleListExamples } from './tools/search-examples.js';
 import { handleValidateStack } from './tools/validate-stack.js';
-const server = new Server({ name: 'iacmp-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
+import { countExamples } from './db/repository.js';
+import { migrateStatic } from './seed/migrate-static.js';
+import { dbPath } from './db/schema.js';
+// Seed automático na primeira execução
+if (countExamples() === 0) {
+    const n = migrateStatic();
+    process.stderr.write(`[iacmp-mcp] Banco inicializado: ${n} exemplos em ${dbPath()}\n`);
+}
+const server = new Server({ name: 'iacmp-mcp', version: '0.2.0' }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         {
             name: 'search_examples',
-            description: 'Busca exemplos de stacks iacmp validados em deploy real por keywords. Use ANTES de gerar qualquer stack para ter um template grounded.',
+            description: 'Busca exemplos de stacks iacmp validados em deploy real. Use SEMPRE antes de gerar qualquer stack para ter um template grounded e evitar alucinações.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    query: { type: 'string', description: 'Ex: "DynamoDB CRUD", "S3 trigger Lambda", "Azure Cosmos"' },
+                    query: { type: 'string', description: 'Ex: "DynamoDB CRUD", "S3 presigned URL", "Azure Cosmos Table"' },
+                    provider: { type: 'string', enum: ['aws', 'azure', 'gcp'], description: 'Filtrar por provider (opcional)' },
                     limit: { type: 'number', description: 'Máximo de resultados (padrão: 3)' },
                 },
                 required: ['query'],
             },
         },
         {
-            name: 'get_example',
-            description: 'Retorna um exemplo específico pelo ID completo.',
+            name: 'list_examples',
+            description: 'Lista todos os exemplos disponíveis no banco de conhecimento.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    id: { type: 'string', description: 'ID do exemplo (ex: "aws-dynamodb-crud")' },
+                    provider: { type: 'string', enum: ['aws', 'azure', 'gcp'], description: 'Filtrar por provider (opcional)' },
                 },
-                required: ['id'],
             },
         },
         {
-            name: 'list_examples',
-            description: 'Lista todos os exemplos disponíveis com seus IDs e tags.',
-            inputSchema: { type: 'object', properties: {} },
-        },
-        {
             name: 'validate_stack',
-            description: 'Valida o conteúdo de uma stack iacmp. Detecta erros comuns: ref() como string, resources inválidos, SDK v2, objeto ref interno exposto. Com projectDir, roda iacmp synth completo.',
+            description: 'Valida o conteúdo de uma stack iacmp. Detecta erros comuns: ref() como string, resources inválidos, SDK v2, objeto ref interno exposto. Com projectDir roda iacmp synth completo.',
             inputSchema: {
                 type: 'object',
                 properties: {
                     content: { type: 'string', description: 'Conteúdo TypeScript da stack' },
-                    filename: { type: 'string', description: 'Caminho relativo no projeto (ex: stacks/compute/api-stack.ts)' },
+                    filename: { type: 'string', description: 'Caminho relativo (ex: stacks/compute/api-stack.ts)' },
                     projectDir: { type: 'string', description: 'Diretório absoluto do projeto para synth completo (opcional)' },
                 },
                 required: ['content'],
@@ -57,11 +60,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case 'search_examples':
             result = handleSearchExamples(args);
             break;
-        case 'get_example':
-            result = handleGetExample(args);
-            break;
         case 'list_examples':
-            result = handleListExamples();
+            result = handleListExamples(args);
             break;
         case 'validate_stack':
             result = handleValidateStack(args);

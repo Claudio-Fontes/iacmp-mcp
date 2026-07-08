@@ -1,39 +1,38 @@
-import { searchExamples, getExampleById, ALL_EXAMPLES } from '../knowledge/index.js';
-function formatExample(ex) {
+import { search } from '../db/bm25.js';
+import { listExamples, countExamples } from '../db/repository.js';
+function formatResult(ex) {
     const sections = [
-        `# ${ex.title}`,
-        `tags: ${ex.tags.join(', ')}`,
+        `# ${ex.title}  [${ex.provider}]`,
+        `constructs: ${ex.constructs.join(', ')} | tags: ${ex.tags.join(', ')}`,
         '',
         '## Stacks',
     ];
-    for (const [path, content] of Object.entries(ex.stacks)) {
-        sections.push(`### ${path}\n\`\`\`typescript\n${content}\n\`\`\``);
+    for (const [p, c] of Object.entries(ex.content.stacks)) {
+        sections.push(`### ${p}\n\`\`\`typescript\n${c}\n\`\`\``);
     }
-    if (Object.keys(ex.handlers).length > 0) {
+    if (Object.keys(ex.content.handlers).length > 0) {
         sections.push('## Handlers');
-        for (const [path, content] of Object.entries(ex.handlers)) {
-            sections.push(`### ${path}\n\`\`\`typescript\n${content}\n\`\`\``);
+        for (const [p, c] of Object.entries(ex.content.handlers)) {
+            sections.push(`### ${p}\n\`\`\`typescript\n${c}\n\`\`\``);
         }
     }
-    if (ex.notes.length > 0) {
-        sections.push('## Regras críticas validadas em deploy real');
-        ex.notes.forEach(n => sections.push(`- ${n}`));
+    if (ex.content.notes.length > 0) {
+        sections.push('## Regras críticas validadas');
+        ex.content.notes.forEach(n => sections.push(`- ${n}`));
     }
     return sections.join('\n');
 }
 export function handleSearchExamples(args) {
-    const results = searchExamples(args.query, args.limit ?? 3);
+    const results = search(args.query, { provider: args.provider, limit: args.limit ?? 3 });
     if (results.length === 0) {
-        return `Nenhum exemplo encontrado para "${args.query}".\nExemplos disponíveis: ${ALL_EXAMPLES.map(e => `${e.id} (${e.tags.join(', ')})`).join('; ')}`;
+        const total = countExamples();
+        return `Nenhum exemplo encontrado para "${args.query}".\nTotal no banco: ${total} exemplos. Use list_examples para ver todos.`;
     }
-    return results.map(formatExample).join('\n\n---\n\n');
+    return results.map(formatResult).join('\n\n---\n\n');
 }
-export function handleGetExample(args) {
-    const ex = getExampleById(args.id);
-    if (!ex)
-        return `Exemplo "${args.id}" não encontrado. IDs disponíveis: ${ALL_EXAMPLES.map(e => e.id).join(', ')}`;
-    return formatExample(ex);
-}
-export function handleListExamples() {
-    return ALL_EXAMPLES.map(e => `- **${e.id}**: ${e.title} [${e.tags.join(', ')}]`).join('\n');
+export function handleListExamples(args) {
+    const rows = listExamples(args.provider);
+    const total = countExamples();
+    const lines = rows.map(r => `- **${r.id}** [${r.provider}]: ${r.title} | ${r.tags.join(', ')}`);
+    return `Total: ${total} exemplos\n\n${lines.join('\n')}`;
 }
