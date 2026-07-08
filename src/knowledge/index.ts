@@ -1,6 +1,12 @@
 import { dynamodbCrud } from './aws/dynamodb-crud.js';
 import { s3LambdaTrigger } from './aws/s3-lambda-trigger.js';
+import { s3PresignedUrl } from './aws/s3-presigned-url.js';
+import { rdsLambdaVpc } from './aws/rds-lambda-vpc.js';
+import { cacheRedisLambda } from './aws/cache-redis-lambda.js';
+import { staticSiteCloudfront } from './aws/static-site-cloudfront.js';
 import { cosmosTableCrud } from './azure/cosmos-table-crud.js';
+import { postgresqlFlexible } from './azure/postgresql-flexible.js';
+import { blobTriggerContainer } from './azure/blob-trigger-container.js';
 
 export interface Example {
   id: string;
@@ -15,10 +21,16 @@ export interface Example {
 export const ALL_EXAMPLES: Example[] = [
   dynamodbCrud,
   s3LambdaTrigger,
+  s3PresignedUrl,
+  rdsLambdaVpc,
+  cacheRedisLambda,
+  staticSiteCloudfront,
   cosmosTableCrud,
+  postgresqlFlexible,
+  blobTriggerContainer,
 ];
 
-// BM25-lite: score por overlap de tokens entre query e tags+title
+// BM25-lite: score por overlap de tokens entre query e tags+title+notes
 export function searchExamples(query: string, limit = 3): Example[] {
   const tokens = query.toLowerCase().split(/\W+/).filter(Boolean);
   return ALL_EXAMPLES
