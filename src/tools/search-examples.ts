@@ -3,8 +3,13 @@ import { listExamples, countExamples } from '../db/repository.js';
 import type { SearchResult } from '../db/bm25.js';
 
 function formatResult(ex: SearchResult): string {
+  // Nível de confiança explícito: validado em deploy real vs gerado por IA. O
+  // LLM usa isso para calibrar o quanto confiar no padrão.
+  const trust = ex.validated
+    ? '✓ validado em deploy real'
+    : '○ gerado por IA (não deployado — bom ponto de partida, revise antes de usar)';
   const sections: string[] = [
-    `# ${ex.title}  [${ex.provider}]`,
+    `# ${ex.title}  [${ex.provider}]  ${trust}`,
     `constructs: ${ex.constructs.join(', ')} | tags: ${ex.tags.join(', ')}`,
     '',
     '## Stacks',
@@ -19,7 +24,7 @@ function formatResult(ex: SearchResult): string {
     }
   }
   if (ex.content.notes.length > 0) {
-    sections.push('## Regras críticas validadas');
+    sections.push(ex.validated ? '## Regras críticas validadas' : '## Regras (do exemplo gerado)');
     ex.content.notes.forEach(n => sections.push(`- ${n}`));
   }
   return sections.join('\n');
@@ -37,6 +42,7 @@ export function handleSearchExamples(args: { query: string; provider?: string; l
 export function handleListExamples(args: { provider?: string }): string {
   const rows = listExamples(args.provider);
   const total = countExamples();
-  const lines = rows.map(r => `- **${r.id}** [${r.provider}]: ${r.title} | ${r.tags.join(', ')}`);
-  return `Total: ${total} exemplos\n\n${lines.join('\n')}`;
+  const nValidated = rows.filter(r => r.validated).length;
+  const lines = rows.map(r => `- ${r.validated ? '✓' : '○'} **${r.id}** [${r.provider}]: ${r.title} | ${r.tags.join(', ')}`);
+  return `Total: ${total} exemplos (${nValidated} validados em deploy, ${rows.length - nValidated} gerados) — ✓ validado, ○ gerado\n\n${lines.join('\n')}`;
 }

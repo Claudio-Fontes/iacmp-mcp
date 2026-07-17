@@ -4,7 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { startTransport, type TransportMode } from './transport/index.js';
 import { handleSearchExamples, handleListExamples } from './tools/search-examples.js';
 import { handleValidateStack } from './tools/validate-stack.js';
-import { countExamples } from './db/repository.js';
+import { countExamples, ftsNeedsRebuild, rebuildFts } from './db/repository.js';
 import { migrateStatic } from './seed/migrate-static.js';
 import { dbPath } from './db/schema.js';
 
@@ -12,6 +12,13 @@ import { dbPath } from './db/schema.js';
 if (countExamples() === 0) {
   const n = migrateStatic();
   process.stderr.write(`[iacmp-mcp] Banco inicializado: ${n} exemplos em ${dbPath()}\n`);
+}
+
+// Reconstrói o índice FTS se estiver defasado — cobre bancos criados antes da
+// migração para FTS5 (que já têm exemplos mas o índice vazio).
+if (ftsNeedsRebuild()) {
+  const n = rebuildFts();
+  process.stderr.write(`[iacmp-mcp] Índice de busca (FTS5) reconstruído: ${n} exemplos\n`);
 }
 
 const server = new Server(
@@ -46,13 +53,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'validate_stack',
-      description: 'Valida o conteúdo de uma stack iacmp. Detecta erros comuns: ref() como string, resources inválidos, SDK v2, objeto ref interno exposto. Com projectDir roda iacmp synth completo.',
+      description: 'Valida uma stack iacmp rodando o `iacmp synth` REAL (mesma verdade do deploy) — não heurísticas. Passe projectDir para validar no seu projeto (autoritativo, recomendado); sem ele, valida a stack isolada num scaffold. Use SEMPRE antes de aceitar uma stack gerada.',
       inputSchema: {
         type: 'object',
         properties: {
           content: { type: 'string', description: 'Conteúdo TypeScript da stack' },
-          filename: { type: 'string', description: 'Caminho relativo (ex: stacks/compute/api-stack.ts)' },
-          projectDir: { type: 'string', description: 'Diretório absoluto do projeto para synth completo (opcional)' },
+          filename: { type: 'string', description: 'Caminho relativo do arquivo (ex: stacks/compute/api-stack.ts) — com projectDir, valida substituindo esse arquivo' },
+          projectDir: { type: 'string', description: 'Diretório absoluto do projeto iacmp — validação autoritativa no projeto completo (recomendado)' },
+          provider: { type: 'string', enum: ['aws', 'azure', 'gcp', 'terraform'], description: 'Provider alvo do synth (padrão: aws no modo isolado; o do iacmp.json com projectDir)' },
+          handlers: { type: 'object', description: 'Código dos handlers referenciados pela stack, por caminho (ex: {"src/api.ts": "..."}). No modo isolado, valida o código do handler também (ex: @aws-sdk em Azure); ausentes viram stub vazio.' },
         },
         required: ['content'],
       },
@@ -71,7 +80,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       result = handleListExamples(args as { provider?: string });
       break;
     case 'validate_stack':
-      result = handleValidateStack(args as { content: string; filename?: string; projectDir?: string });
+      result = handleValidateStack(args as { content: string; filename?: string; projectDir?: string; provider?: string; handlers?: Record<string, string> });
       break;
     default:
       result = `Tool desconhecida: ${name}`;
