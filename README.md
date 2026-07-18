@@ -1,0 +1,91 @@
+# iacmp-mcp
+
+MCP server para o [iacmp](https://github.com/cme1o/iacmp) — expõe ferramentas de busca e execução de infraestrutura para qualquer AI com suporte a MCP (Claude no VS Code, Cursor, etc.).
+
+## Instalação
+
+```bash
+npx -y @iacmp/mcp stdio
+```
+
+Ou globalmente:
+
+```bash
+npm install -g @iacmp/mcp
+```
+
+## Configuração
+
+Adicione ao seu `~/.claude/settings.json` ou `.mcp.json` do projeto:
+
+**Com npx (sem instalação prévia):**
+```json
+{
+  "mcpServers": {
+    "iacmp": {
+      "command": "npx",
+      "args": ["-y", "@iacmp/mcp", "stdio"]
+    }
+  }
+}
+```
+
+**Com instalação global:**
+```json
+{
+  "mcpServers": {
+    "iacmp": {
+      "command": "iacmp-mcp",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+**Via Claude Code CLI:**
+```bash
+claude mcp add iacmp -- npx -y @iacmp/mcp stdio
+```
+
+## Ferramentas
+
+### Busca e validação
+
+| Ferramenta | Descrição |
+|---|---|
+| `search_examples` | Busca exemplos de stacks validados em deploy real (BM25 + FTS5) |
+| `list_examples` | Lista todos os exemplos disponíveis por provider |
+| `validate_stack` | Valida uma stack rodando `iacmp synth` real — não heurísticas |
+
+### Execução
+
+| Ferramenta | Descrição |
+|---|---|
+| `write_stack` | Escreve um arquivo TypeScript de stack no projeto |
+| `synth_project` | Roda `iacmp synth` no projeto — valida e gera templates |
+| `deploy_project` | Roda `iacmp deploy --yes` no projeto |
+| `destroy_project` | Roda `iacmp destroy --yes` no projeto |
+| `read_synth_output` | Lê os templates gerados (Bicep, CloudFormation, tf.json) |
+
+## Fluxo de uso
+
+Com as ferramentas de execução, qualquer AI com MCP conectado pode orquestrar o ciclo completo sem abrir terminal:
+
+```
+search_examples("serverless dynamodb azure")    → busca padrão no banco
+write_stack({ projectPath, filePath, content }) → escreve a stack
+synth_project({ projectPath, provider })        → valida + gera templates
+read_synth_output({ projectPath, provider })    → inspeciona o Bicep/CFN gerado
+deploy_project({ projectPath, provider })       → deploya na cloud
+destroy_project({ projectPath, provider })      → remove os recursos
+```
+
+## Banco de conhecimento
+
+O servidor mantém um banco SQLite em `~/.iacmp/knowledge.db` com 230+ exemplos de stacks iacmp validados em deploy real (AWS e Azure). A busca usa FTS5 com boost para exemplos validados.
+
+## Pré-requisitos
+
+- Node.js 18+
+- [iacmp](https://github.com/cme1o/iacmp) instalado e no PATH (necessário para as ferramentas de execução)
+- Credenciais de cloud configuradas (AWS CLI, Azure CLI) para deploy/destroy
