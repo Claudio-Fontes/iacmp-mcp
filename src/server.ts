@@ -4,6 +4,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { startTransport, type TransportMode } from './transport/index.js';
 import { handleSearchExamples, handleListExamples } from './tools/search-examples.js';
 import { handleValidateStack } from './tools/validate-stack.js';
+import { handleWriteStack } from './tools/write-stack.js';
+import { handleSynthProject, handleDeployProject, handleDestroyProject } from './tools/run-project.js';
+import { handleReadSynthOutput } from './tools/read-synth-output.js';
 import { countExamples, ftsNeedsRebuild, rebuildFts } from './db/repository.js';
 import { migrateStatic } from './seed/migrate-static.js';
 import { dbPath } from './db/schema.js';
@@ -66,6 +69,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['content'],
       },
     },
+    {
+      name: 'write_stack',
+      description: 'Escreve um arquivo TypeScript de stack no projeto iacmp. Use para criar ou atualizar stacks antes de rodar synth_project.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string', description: 'Caminho absoluto do projeto iacmp' },
+          filePath: { type: 'string', description: 'Caminho relativo do arquivo dentro do projeto (ex: stacks/main.ts)' },
+          content: { type: 'string', description: 'Conteúdo TypeScript da stack' },
+        },
+        required: ['projectPath', 'filePath', 'content'],
+      },
+    },
+    {
+      name: 'synth_project',
+      description: 'Roda `iacmp synth` no projeto. Valida a stack, roda os guards e gera os templates (CloudFormation, Bicep, tf.json). Use depois de write_stack e antes de deploy_project.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string', description: 'Caminho absoluto do projeto iacmp' },
+          provider: { type: 'string', enum: ['aws', 'azure', 'gcp', 'terraform'], description: 'Provider alvo (padrão: o do iacmp.json)' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'deploy_project',
+      description: 'Roda `iacmp deploy --yes` no projeto. Faz o deploy real na cloud. Requer que synth_project tenha passado antes.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string', description: 'Caminho absoluto do projeto iacmp' },
+          provider: { type: 'string', enum: ['aws', 'azure', 'gcp', 'terraform'], description: 'Provider alvo (padrão: o do iacmp.json)' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'destroy_project',
+      description: 'Roda `iacmp destroy --yes` no projeto. Remove todos os recursos da cloud. Use com cautela — ação irreversível.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string', description: 'Caminho absoluto do projeto iacmp' },
+          provider: { type: 'string', enum: ['aws', 'azure', 'gcp', 'terraform'], description: 'Provider alvo (padrão: o do iacmp.json)' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'read_synth_output',
+      description: 'Lê os arquivos gerados pelo synth (templates CloudFormation, Bicep, tf.json). Use para inspecionar o que será deployado antes de rodar deploy_project.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string', description: 'Caminho absoluto do projeto iacmp' },
+          provider: { type: 'string', enum: ['aws', 'azure', 'gcp', 'terraform'], description: 'Provider cujos templates ler' },
+        },
+        required: ['projectPath', 'provider'],
+      },
+    },
   ],
 }));
 
@@ -81,6 +145,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       break;
     case 'validate_stack':
       result = handleValidateStack(args as { content: string; filename?: string; projectDir?: string; provider?: string; handlers?: Record<string, string> });
+      break;
+    case 'write_stack':
+      result = handleWriteStack(args as { projectPath: string; filePath: string; content: string });
+      break;
+    case 'synth_project':
+      result = handleSynthProject(args as { projectPath: string; provider?: any });
+      break;
+    case 'deploy_project':
+      result = handleDeployProject(args as { projectPath: string; provider?: any });
+      break;
+    case 'destroy_project':
+      result = handleDestroyProject(args as { projectPath: string; provider?: any });
+      break;
+    case 'read_synth_output':
+      result = handleReadSynthOutput(args as { projectPath: string; provider: string });
       break;
     default:
       result = `Tool desconhecida: ${name}`;
