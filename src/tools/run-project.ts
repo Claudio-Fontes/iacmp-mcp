@@ -23,7 +23,7 @@ export function handleDeployProject(args: { projectPath: string; provider?: Prov
 export function handleDestroyProject(args: { projectPath: string; provider?: Provider }): string {
   const { projectPath, provider } = args;
   const providerArgs = provider ? ['--provider', provider] : [];
-  const { ok, output } = runIacmp('destroy', [...providerArgs, '--yes'], projectPath);
+  const { ok, output } = runIacmp('destroy', [...providerArgs, '--force'], projectPath);
   return ok
     ? `✓ Destroy concluído\n${output}`
     : `✗ Destroy falhou:\n${output}`;

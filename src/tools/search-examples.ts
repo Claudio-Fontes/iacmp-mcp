@@ -23,9 +23,12 @@ function formatResult(ex: SearchResult): string {
       sections.push(`### ${p}\n\`\`\`typescript\n${c}\n\`\`\``);
     }
   }
-  if (ex.content.notes.length > 0) {
+  const notes: string[] = Array.isArray(ex.content.notes)
+    ? ex.content.notes
+    : (ex.content.notes ? [ex.content.notes as unknown as string] : []);
+  if (notes.length > 0) {
     sections.push(ex.validated ? '## Regras críticas validadas' : '## Regras (do exemplo gerado)');
-    ex.content.notes.forEach(n => sections.push(`- ${n}`));
+    notes.forEach(n => sections.push(`- ${n}`));
   }
   return sections.join('\n');
 }

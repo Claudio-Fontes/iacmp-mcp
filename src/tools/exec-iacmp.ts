@@ -6,7 +6,7 @@ const ALLOWED_CMDS = new Set(['synth', 'deploy', 'destroy']);
 // Timeout generoso para deploy Azure (APIM + Cosmos podem levar ~10min).
 const TIMEOUT_MS: Record<string, number> = {
   synth: 90_000,
-  deploy: 900_000,
+  deploy: 0, // 0 = sem timeout — aguarda o CloudFormation completar independente do tempo
   destroy: 600_000,
 };
 
