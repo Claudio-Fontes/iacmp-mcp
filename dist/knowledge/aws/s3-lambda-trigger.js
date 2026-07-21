@@ -17,7 +17,7 @@ new Fn.Lambda(stack, 'ProcessFileFn', {
   runtime: 'nodejs20',
   handler: 'dist/processFile.handler',
   code: '.',
-  environment: { BUCKET_NAME: 'UploadsBucket' },
+  environment: { BUCKET_NAME: ref('UploadsBucket', 'Name') },
 });
 new Policy.IAM(stack, 'ProcessFileFnPolicy', {
   attachTo: 'ProcessFileFn', attachType: 'lambda',
@@ -43,6 +43,7 @@ export const handler = async (event: any) => {
     notes: [
         'bucket e key vêm de event.Records[n].s3 — NUNCA de env var no trigger',
         'BUCKET_NAME na env var é para operações de output (write em outro bucket)',
+        "environment: BUCKET_NAME usa ref('UploadsBucket', 'Name') — NUNCA o ID lógico como string literal",
         'Storage.Bucket e Fn.Lambda devem estar em stacks SEPARADAS para evitar ciclo CloudFormation',
         'trigger.lambdaId referencia o ID lógico da Lambda em outra stack',
     ],

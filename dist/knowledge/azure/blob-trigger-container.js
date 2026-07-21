@@ -16,7 +16,7 @@ const stack = new Stack('uploads-processor');
 new Compute.Container(stack, 'ProcessFileFn', {
   image: 'processor:latest',
   port: 8080,
-  environment: { BUCKET_NAME: 'UploadsBucket' },
+  environment: { BUCKET_NAME: ref('UploadsBucket', 'Name') },
 });
 new Policy.IAM(stack, 'ProcessFileFnPolicy', {
   attachTo: 'ProcessFileFn', attachType: 'container',
@@ -39,6 +39,7 @@ export default stack;`,
         'NUNCA usar record.blob.name — não existe no formato normalizado',
         'Policy.IAM com s3:GetObject obrigatória para leitura do blob',
         'resources: [ref("UploadsBucket","Arn")] — NUNCA string literal',
+        "environment: BUCKET_NAME usa ref('UploadsBucket', 'Name') — NUNCA o ID lógico como string literal",
         'trigger.lambdaId referencia o ID lógico do Container ou Lambda em outra stack',
     ],
 };
