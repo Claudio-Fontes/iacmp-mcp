@@ -11,6 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/server.js stdio",
+    "sync": "npm run build && node dist/seed/sync.js",
     "test": "npm run build && node test/retrieval.test.mjs",
     "test:integration": "npm run build && node test/validate.test.mjs",
     "test:contract": "npm run build && node test/contract-battery.mjs"

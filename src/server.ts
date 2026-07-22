@@ -11,11 +11,21 @@ import { countExamples, ftsNeedsRebuild, rebuildFts } from './db/repository.js';
 import { migrateStatic } from './seed/migrate-static.js';
 import { dbPath } from './db/schema.js';
 
-// Seed automático na primeira execução
-if (countExamples() === 0) {
-  const n = migrateStatic();
-  process.stderr.write(`[iacmp-mcp] Banco inicializado: ${n} exemplos em ${dbPath()}\n`);
-}
+// Seed inicial + SYNC automático a cada start do servidor: migrateStatic() faz
+// upsert por id (idempotente) sobre os exemplos curados de src/knowledge/**.
+// Roda SEMPRE, não só quando o banco está vazio — sem isso, qualquer fixture
+// nova/editada no repo fica invisível pro search_examples/iacmp ai até alguém
+// rodar o sync manualmente (gap real encontrado em 2026-07-22: 11 fixtures
+// novas + 1 órfã de commit anterior ficaram fora do banco por dias). upsert
+// nunca remove linhas — o banco tem ~230 exemplos de outras fontes (seed em
+// lote); este passo só soma/atualiza os curados de ALL_EXAMPLES.
+const wasEmpty = countExamples() === 0;
+const n = migrateStatic();
+process.stderr.write(
+  wasEmpty
+    ? `[iacmp-mcp] Banco inicializado: ${n} exemplos em ${dbPath()}\n`
+    : `[iacmp-mcp] Knowledge base sincronizada: ${n} exemplos curados (upsert) em ${dbPath()}\n`
+);
 
 // Reconstrói o índice FTS se estiver defasado — cobre bancos criados antes da
 // migração para FTS5 (que já têm exemplos mas o índice vazio).
