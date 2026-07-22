@@ -4,10 +4,21 @@ import { s3PresignedUrl } from './aws/s3-presigned-url.js';
 import { rdsLambdaVpc } from './aws/rds-lambda-vpc.js';
 import { cacheRedisLambda } from './aws/cache-redis-lambda.js';
 import { staticSiteCloudfront } from './aws/static-site-cloudfront.js';
+import { sqsWorker } from './aws/sqs-worker.js';
+import { snsFanout } from './aws/sns-fanout.js';
+import { eventbridgeCron } from './aws/eventbridge-cron.js';
+import { secretsManagerApiKey } from './aws/secrets-manager-multi-env.js';
+import { fargateAlbAutoscale } from './aws/fargate-alb-autoscale.js';
+import { jwtAuthorizer } from './aws/jwt-authorizer.js';
+import { stepFunctionsApproval } from './aws/step-functions-approval.js';
+import { documentdbLambdaVpc } from './aws/documentdb-lambda-vpc.js';
 import { cosmosTableCrud } from './azure/cosmos-table-crud.js';
 import { postgresqlFlexible } from './azure/postgresql-flexible.js';
 import { blobTriggerContainer } from './azure/blob-trigger-container.js';
 import { cacheRedis } from './azure/cache-redis.js';
+import { postgresPrivateVnet } from './azure/postgres-private-vnet.js';
+import { staticSiteCdn } from './azure/static-site-cdn.js';
+import { containerAppsIngress } from './azure/container-apps-ingress.js';
 
 export interface Example {
   id: string;
@@ -26,10 +37,21 @@ export const ALL_EXAMPLES: Example[] = [
   rdsLambdaVpc,
   cacheRedisLambda,
   staticSiteCloudfront,
+  sqsWorker,
+  snsFanout,
+  eventbridgeCron,
+  secretsManagerApiKey,
+  fargateAlbAutoscale,
+  jwtAuthorizer,
+  stepFunctionsApproval,
+  documentdbLambdaVpc,
   cosmosTableCrud,
   postgresqlFlexible,
   blobTriggerContainer,
   cacheRedis,
+  postgresPrivateVnet,
+  staticSiteCdn,
+  containerAppsIngress,
 ];
 
 // BM25-lite: score por overlap de tokens entre query e tags+title+notes
