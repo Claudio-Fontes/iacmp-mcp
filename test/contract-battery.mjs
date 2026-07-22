@@ -239,7 +239,101 @@ const INVARIANTS = [
       return { status: 'FAIL', detail: problems.join('; ') };
     },
   },
+  {
+    // Bug #6: "declarou privado, gerou público". Database.SQL com subnetIds no
+    // Azure DEVE virar Postgres com delegatedSubnetResourceId e SEM firewall
+    // pública (0.0.0.0). O synth passa mesmo se ignorar subnetIds — só o deploy
+    // (ou este check) pega a infra pública silenciosa.
+    id: 'azure-db-private',
+    check(ex, ctx) {
+      if (ctx.provider !== 'azure') return { status: 'N/A' };
+      if (!(/Database\.SQL/.test(ctx.stacksSrc) && /subnetIds/.test(ctx.stacksSrc))) return { status: 'N/A' };
+      const bicep = ctx.outputFiles.filter(f => f.name.endsWith('.bicep') && !f.name.startsWith('_')).map(f => f.content).join('\n');
+      const hasDelegatedSubnet = /delegatedSubnetResourceId/.test(bicep);
+      const hasPublicFirewall = /0\.0\.0\.0/.test(bicep);
+      if (hasDelegatedSubnet && !hasPublicFirewall) return { status: 'PASS' };
+      return { status: 'FAIL', detail: `delegatedSubnetResourceId=${hasDelegatedSubnet}; firewall pública 0.0.0.0=${hasPublicFirewall}` };
+    },
+  },
+  {
+    // Bug #13: subnet do Container App Environment PRECISA de delegation
+    // Microsoft.App/environments (o ARM 2023-05-01 exige, apesar da doc). Sem
+    // ela o synth passa mas o deploy falha em preflight.
+    id: 'azure-cae-delegation',
+    check(ex, ctx) {
+      if (ctx.provider !== 'azure') return { status: 'N/A' };
+      if (!(/Compute\.Container/.test(ctx.stacksSrc) && /subnetIds/.test(ctx.stacksSrc))) return { status: 'N/A' };
+      const bicep = ctx.outputFiles.filter(f => f.name.endsWith('.bicep') && !f.name.startsWith('_')).map(f => f.content).join('\n');
+      const hasCaeDelegation = /Microsoft\.App\/environments/.test(bicep) && /delegations/.test(bicep);
+      if (hasCaeDelegation) return { status: 'PASS' };
+      return { status: 'FAIL', detail: 'subnet do Container App sem delegation Microsoft.App/environments' };
+    },
+  },
+  {
+    // Porta/host/URL de infra hardcoded numa env var (deve ser ref()). Regra de
+    // parada explícita da bateria — REDIS_PORT: '6379' etc.
+    id: 'no-hardcoded-conn',
+    check(ex, ctx) {
+      const offenders = [];
+      for (const m of ctx.stacksSrc.matchAll(/(\w+):\s*'([^']*)'/g)) {
+        const [, key, val] = m;
+        if (!/PORT|HOST|URL|URI|ENDPOINT|CONNECTION/i.test(key)) continue;
+        if (/^(6379|5432|27017|3306|10000)$/.test(val) || /:\/\//.test(val)) offenders.push(`${key}='${val}'`);
+      }
+      if (offenders.length === 0) return { status: 'PASS' };
+      return { status: 'FAIL', detail: `hardcoded (use ref()): ${offenders.join(', ')}` };
+    },
+  },
 ];
+
+// ── Matriz de cobertura (20 cenários × 2 clouds) ────────────────────────────
+// Palavras-chave casadas contra tags+title de cada exemplo. Mostra o caminho
+// para as centenas: quais cenários já têm fixture e quais faltam.
+const SCENARIO_MATRIX = [
+  { n: 1, name: 'CRUD + RDS/SQL + CDN', kw: ['rds', 'postgres', 'cloudfront', 'cdn'] },
+  { n: 2, name: 'CRUD serverless (Dynamo/Cosmos)', kw: ['dynamodb', 'cosmos'] },
+  { n: 3, name: 'Worker de fila', kw: ['sqs', 'service-bus', 'queue', 'worker'] },
+  { n: 4, name: 'Storage + CORS/presigned', kw: ['s3', 'blob', 'presigned', 'sas', 'cors'] },
+  { n: 5, name: 'Agendamento (cron)', kw: ['eventbridge', 'schedule', 'cron', 'timer'] },
+  { n: 6, name: 'Site estático + CDN/OAC', kw: ['static-site', 'website', 'oac'] },
+  { n: 7, name: 'Fan-out (SNS→SQS / topic)', kw: ['sns', 'fanout', 'topic'] },
+  { n: 8, name: 'API + cache Redis', kw: ['redis', 'cache', 'elasticache', 'redisenterprise'] },
+  { n: 9, name: 'DB privado em VPC/VNet', kw: ['vpc', 'vnet', 'private', 'lambda-vpc'] },
+  { n: 10, name: 'Container + LB + autoscale', kw: ['fargate', 'container-apps', 'alb', 'ingress'] },
+  { n: 11, name: 'Trigger de storage', kw: ['s3-lambda-trigger', 'blob-trigger', 'event-grid'] },
+  { n: 12, name: 'JWT Authorizer', kw: ['jwt', 'authorizer'] },
+  { n: 13, name: 'Monitor + alerta', kw: ['cloudwatch', 'monitor', 'alarm', 'action-group'] },
+  { n: 14, name: 'Workflow (Step/Logic)', kw: ['step-functions', 'logic-apps', 'workflow', 'durable'] },
+  { n: 15, name: 'WAF', kw: ['waf', 'front-door', 'app-gateway'] },
+  { n: 16, name: 'DocumentDB / Mongo', kw: ['documentdb', 'mongodb', 'mongo'] },
+  { n: 17, name: 'Stream (Kinesis/Event Hubs)', kw: ['kinesis', 'event-hubs', 'stream'] },
+  { n: 18, name: 'Secrets multi-ambiente', kw: ['secrets', 'key-vault', 'secrets-manager', 'config'] },
+  { n: 19, name: 'WebSocket', kw: ['websocket', 'web-pubsub'] },
+  { n: 20, name: 'Microsserviço composto', kw: ['microservice', 'microsservico'] },
+];
+
+function coverageReport() {
+  const covered = { aws: new Map(), azure: new Map() };
+  for (const ex of ALL_EXAMPLES) {
+    const cloud = ex.tags.includes('azure') ? 'azure' : 'aws';
+    const hay = [ex.title, ...ex.tags].join(' ').toLowerCase();
+    for (const s of SCENARIO_MATRIX) {
+      if (s.kw.some(k => hay.includes(k))) {
+        const list = covered[cloud].get(s.n) ?? [];
+        list.push(ex.id);
+        covered[cloud].set(s.n, list);
+      }
+    }
+  }
+  console.log('\n=== Cobertura da matriz (20 cenários × 2 clouds) ===');
+  let awsCov = 0, azCov = 0;
+  for (const s of SCENARIO_MATRIX) {
+    const a = covered.aws.get(s.n), z = covered.azure.get(s.n);
+    if (a) awsCov++; if (z) azCov++;
+    console.log(`${String(s.n).padStart(2)} ${col(s.name, 34)} AWS:${a ? '✓' : '·'}  Azure:${z ? '✓' : '·'}`);
+  }
+  console.log(`\nCobertura por fixture: AWS ${awsCov}/20 · Azure ${azCov}/20 (as lacunas "·" são os próximos fixtures a autorar).`);
+}
 
 // ── Execução ─────────────────────────────────────────────────────────────────
 
@@ -269,9 +363,9 @@ for (const ex of ALL_EXAMPLES) {
 // ── Relatório ────────────────────────────────────────────────────────────────
 
 const invIds = INVARIANTS.map(i => i.id);
-console.log('\n=== Harness de contrato — 9 exemplos curados ===\n');
+const col = (s, w) => String(s).padEnd(w).slice(0, w);
+console.log(`\n=== Harness de contrato — ${ALL_EXAMPLES.length} exemplos curados × ${invIds.length} invariantes ===\n`);
 
-const col = (s, w) => s.padEnd(w).slice(0, w);
 const idW = Math.max(...results.map(r => r.id.length), 'exemplo'.length) + 1;
 console.log(col('exemplo', idW) + invIds.map(i => col(i, 22)).join(''));
 for (const r of results) {
@@ -292,4 +386,7 @@ for (const r of results) {
 if (failCount === 0) console.log('(nenhuma)');
 
 console.log(`\n${results.length} exemplos, ${failCount} falha(s) de invariante.`);
+
+coverageReport();
+
 process.exit(failCount === 0 ? 0 : 1);
