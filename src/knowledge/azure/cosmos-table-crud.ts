@@ -2,8 +2,8 @@ import type { Example } from '../index.js';
 
 export const cosmosTableCrud: Example = {
   id: 'azure-cosmos-table-crud',
-  title: 'Azure Cosmos DB Table API (DynamoDB equivalente) com Lambda + APIM',
-  tags: ['azure', 'cosmos', 'dynamodb', 'lambda', 'crud', 'apim', 'data-tables'],
+  title: 'Azure Cosmos DB MongoDB API (DynamoDB equivalente) com Lambda + APIM',
+  tags: ['azure', 'cosmos', 'dynamodb', 'mongodb', 'lambda', 'crud', 'apim'],
   validated: true,
   stacks: {
     'stacks/database/items-stack.ts': `import { Stack, Database } from '@iacmp/core';
@@ -18,7 +18,6 @@ export default stack;`,
     'stacks/compute/api-stack.ts': `import { Stack, Fn, ref } from '@iacmp/core';
 const stack = new Stack('items-api');
 const env = {
-  COSMOS_CONNECTION: ref('ItemsTable', 'ConnectionString'),
   TABLE_NAME: ref('ItemsTable', 'Name'),
 };
 new Fn.Lambda(stack, 'CreateItemFn', { runtime: 'nodejs20', handler: 'dist/createItem.handler', code: '.', environment: env });
@@ -44,53 +43,58 @@ new Fn.ApiGateway(stack, 'ItemsApi', {
 export default stack;`,
   },
   handlers: {
-    'src/createItem.ts': `import { TableClient } from '@azure/data-tables';
+    'src/tableClient.ts': `import { MongoClient, Collection } from 'mongodb';
+let client: MongoClient | null = null;
+export async function getCollection(): Promise<Collection> {
+  if (!client) { client = new MongoClient(process.env.MONGO_URI!); await client.connect(); }
+  return client.db(process.env.DB_NAME).collection(process.env.TABLE_NAME!);
+}`,
+    'src/createItem.ts': `import { getCollection } from './tableClient';
 import { randomUUID } from 'crypto';
-const client = TableClient.fromConnectionString(process.env.COSMOS_CONNECTION!, process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body ?? {});
   const id = randomUUID();
-  const { id: _id, ...rest } = body; // 'id' é reservado na Table API
-  await client.createEntity({ partitionKey: 'items', rowKey: id, ...rest });
-  return { statusCode: 201, body: JSON.stringify({ id, ...rest }) };
+  const col = await getCollection();
+  await col.insertOne({ id, ...body });
+  return { statusCode: 201, body: JSON.stringify({ id, ...body }) };
 };`,
-    'src/listItems.ts': `import { TableClient } from '@azure/data-tables';
-const client = TableClient.fromConnectionString(process.env.COSMOS_CONNECTION!, process.env.TABLE_NAME!);
+    'src/listItems.ts': `import { getCollection } from './tableClient';
 export const handler = async () => {
-  const items: any[] = [];
-  for await (const e of client.listEntities()) items.push({ id: e.rowKey, ...e });
+  const col = await getCollection();
+  const items = await col.find({}).project({ _id: 0 }).toArray();
   return { statusCode: 200, body: JSON.stringify(items) };
 };`,
-    'src/getItem.ts': `import { TableClient } from '@azure/data-tables';
-const client = TableClient.fromConnectionString(process.env.COSMOS_CONNECTION!, process.env.TABLE_NAME!);
+    'src/getItem.ts': `import { getCollection } from './tableClient';
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
-  const e = await client.getEntity('items', id);
-  return { statusCode: 200, body: JSON.stringify({ id: e.rowKey, ...e }) };
+  const col = await getCollection();
+  const item = await col.findOne({ id }, { projection: { _id: 0 } });
+  if (!item) return { statusCode: 404, body: JSON.stringify({ error: 'não encontrado' }) };
+  return { statusCode: 200, body: JSON.stringify(item) };
 };`,
-    'src/updateItem.ts': `import { TableClient } from '@azure/data-tables';
-const client = TableClient.fromConnectionString(process.env.COSMOS_CONNECTION!, process.env.TABLE_NAME!);
+    'src/updateItem.ts': `import { getCollection } from './tableClient';
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
   const body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body ?? {});
   const { id: _id, ...rest } = body;
-  await client.updateEntity({ partitionKey: 'items', rowKey: id, ...rest }, 'Replace');
+  const col = await getCollection();
+  await col.updateOne({ id }, { $set: rest }, { upsert: true });
   return { statusCode: 200, body: JSON.stringify({ id, ...rest }) };
 };`,
-    'src/deleteItem.ts': `import { TableClient } from '@azure/data-tables';
-const client = TableClient.fromConnectionString(process.env.COSMOS_CONNECTION!, process.env.TABLE_NAME!);
+    'src/deleteItem.ts': `import { getCollection } from './tableClient';
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
-  await client.deleteEntity('items', id);
+  const col = await getCollection();
+  await col.deleteOne({ id });
   return { statusCode: 204, body: '' };
 };`,
   },
   notes: [
-    'Azure: env vars usam ref() — COSMOS_CONNECTION: ref("ItemsTable","ConnectionString"), TABLE_NAME: ref("ItemsTable","Name")',
+    'Azure: Database.DynamoDB vira Cosmos DB MongoDB API (kind: MongoDB) — NÃO Table API. env var ÚNICA: TABLE_NAME: ref("ItemsTable","Name") — o synth injeta MONGO_URI e DB_NAME automaticamente no Function App.',
     'stageName: "api" no ApiGateway — NUNCA "" (string vazia causa 404)',
-    '"id" é propriedade RESERVADA na Table API — sempre excluir do spread com { id: _id, ...rest }',
-    'listEntities() é AsyncIterable — SEMPRE use for await',
-    'Policy.IAM NÃO é necessária no Azure para Cosmos Table — connection string já autentica',
-    'NUNCA @aws-sdk/* em projeto Azure',
+    'Chave de negócio é o campo "id" (string, gerado com randomUUID) — NUNCA use o _id interno do driver mongodb como chave de negócio.',
+    'findOne/deleteOne/updateOne NUNCA lançam quando o documento não existe (retornam null/matchedCount 0) — diferente da Table API, não precisa tratar 404 explicitamente.',
+    'Policy.IAM NÃO é necessária no Azure para Cosmos — a connection string (MONGO_URI) já autentica',
+    'NUNCA @aws-sdk/* nem @azure/data-tables/TableClient em projeto Azure',
   ],
 };
