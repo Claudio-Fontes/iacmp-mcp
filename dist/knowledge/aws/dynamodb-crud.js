@@ -18,31 +18,31 @@ new Fn.Lambda(stack, 'CreateItemFn', {
   runtime: 'nodejs20',
   handler: 'dist/createItem.handler',
   code: '.',
-  environment: { TABLE_NAME: 'ItemsTable' },
+  environment: { TABLE_NAME: ref('ItemsTable', 'Name') },
 });
 new Fn.Lambda(stack, 'GetItemFn', {
   runtime: 'nodejs20',
   handler: 'dist/getItem.handler',
   code: '.',
-  environment: { TABLE_NAME: 'ItemsTable' },
+  environment: { TABLE_NAME: ref('ItemsTable', 'Name') },
 });
 new Fn.Lambda(stack, 'ListItemsFn', {
   runtime: 'nodejs20',
   handler: 'dist/listItems.handler',
   code: '.',
-  environment: { TABLE_NAME: 'ItemsTable' },
+  environment: { TABLE_NAME: ref('ItemsTable', 'Name') },
 });
 new Fn.Lambda(stack, 'UpdateItemFn', {
   runtime: 'nodejs20',
   handler: 'dist/updateItem.handler',
   code: '.',
-  environment: { TABLE_NAME: 'ItemsTable' },
+  environment: { TABLE_NAME: ref('ItemsTable', 'Name') },
 });
 new Fn.Lambda(stack, 'DeleteItemFn', {
   runtime: 'nodejs20',
   handler: 'dist/deleteItem.handler',
   code: '.',
-  environment: { TABLE_NAME: 'ItemsTable' },
+  environment: { TABLE_NAME: ref('ItemsTable', 'Name') },
 });
 new Policy.IAM(stack, 'CreateItemFnPolicy', {
   attachTo: 'CreateItemFn', attachType: 'lambda',

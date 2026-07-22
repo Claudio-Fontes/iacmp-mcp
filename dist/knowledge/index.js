@@ -7,6 +7,7 @@ import { staticSiteCloudfront } from './aws/static-site-cloudfront.js';
 import { cosmosTableCrud } from './azure/cosmos-table-crud.js';
 import { postgresqlFlexible } from './azure/postgresql-flexible.js';
 import { blobTriggerContainer } from './azure/blob-trigger-container.js';
+import { cacheRedis } from './azure/cache-redis.js';
 export const ALL_EXAMPLES = [
     dynamodbCrud,
     s3LambdaTrigger,
@@ -17,6 +18,7 @@ export const ALL_EXAMPLES = [
     cosmosTableCrud,
     postgresqlFlexible,
     blobTriggerContainer,
+    cacheRedis,
 ];
 // BM25-lite: score por overlap de tokens entre query e tags+title+notes
 export function searchExamples(query, limit = 3) {

@@ -8,10 +8,10 @@ export const staticSiteCloudfront: Example = {
   stacks: {
     'stacks/storage/frontend-stack.ts': `import { Stack, Storage, Network } from '@iacmp/core';
 const stack = new Stack('frontend-cdn');
-// Storage.Bucket e Network.CDN na MESMA stack — bucketRef é referência local (GetAtt)
+// Bucket PRIVADO servido via CloudFront/OAC + Network.CDN na MESMA stack (bucketRef = GetAtt local)
 new Storage.Bucket(stack, 'FrontendBucket', {
   versioning: false,
-  websiteHosting: true,
+  websiteHosting: false,
 });
 new Network.CDN(stack, 'FrontendCDN', {
   bucketRef: 'FrontendBucket',
@@ -21,8 +21,8 @@ export default stack;`,
   },
   handlers: {},
   notes: [
-    'Storage.Bucket e Network.CDN devem estar na MESMA stack — bucketRef é GetAtt local, não cross-stack',
-    'NUNCA websiteHosting: true com bucketRef em stacks separadas — bucketRef exige GetAtt',
+    'Servido via CloudFront/OAC → o bucket fica PRIVADO: websiteHosting: false (o CDN serve o defaultRootObject). websiteHosting: true tornaria o bucket público e conflita com OAC — nunca os dois juntos.',
+    'Storage.Bucket e Network.CDN na MESMA stack — bucketRef é GetAtt local, não cross-stack',
     'Network.CDN (não Storage.CDN — não existe)',
     'Sem certificateArn o CloudFront usa *.cloudfront.net — NUNCA gerar placeholder de ARN',
     'Para SPA com React Router: adicionar errorPage: "/index.html" nas props do CDN',

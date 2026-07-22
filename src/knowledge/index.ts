@@ -7,6 +7,7 @@ import { staticSiteCloudfront } from './aws/static-site-cloudfront.js';
 import { cosmosTableCrud } from './azure/cosmos-table-crud.js';
 import { postgresqlFlexible } from './azure/postgresql-flexible.js';
 import { blobTriggerContainer } from './azure/blob-trigger-container.js';
+import { cacheRedis } from './azure/cache-redis.js';
 
 export interface Example {
   id: string;
@@ -28,6 +29,7 @@ export const ALL_EXAMPLES: Example[] = [
   cosmosTableCrud,
   postgresqlFlexible,
   blobTriggerContainer,
+  cacheRedis,
 ];
 
 // BM25-lite: score por overlap de tokens entre query e tags+title+notes

@@ -29,7 +29,7 @@ new Fn.Lambda(stack, 'CacheFn', {
   handler: 'dist/cache.handler',
   code: '.',
   environment: {
-    REDIS_HOST: ref('AppCache', 'Host'),
+    REDIS_HOST: ref('AppCache', 'Endpoint'),
     REDIS_PORT: ref('AppCache', 'Port'),
   },
   vpcId: 'AppVpc',
@@ -56,7 +56,7 @@ export async function handler(event: any) {
     },
     notes: [
         'import { Redis } from "ioredis" — NUNCA import Redis from "ioredis" (causa TS2351 no build do deploy)',
-        'REDIS_HOST: ref("AppCache","Host"), REDIS_PORT: ref("AppCache","Port") — NUNCA hardcode porta',
+        'REDIS_HOST: ref("AppCache","Endpoint"), REDIS_PORT: ref("AppCache","Port") — NUNCA hardcode porta',
         'ElastiCache exige TLS — use tls: {} nas opções do Redis para forçar rediss://',
         'Redis fica dentro da VPC — não precisa de VpcEndpoint',
         'Lambda precisa de vpcId + subnetIds + securityGroupIds para alcançar o Redis',
