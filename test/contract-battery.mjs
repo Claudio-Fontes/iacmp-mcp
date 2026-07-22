@@ -19,7 +19,24 @@ try {
   process.exit(0);
 }
 
-const { ALL_EXAMPLES } = await import('../dist/knowledge/index.js');
+// Fonte: 'curados' (ALL_EXAMPLES estático, default) ou 'db' (os 242 do banco
+// vivo que o search_examples/iacmp ai REALMENTE usam). IACMP_CONTRACT_SOURCE=db.
+const SOURCE = process.env.IACMP_CONTRACT_SOURCE === 'db' ? 'db' : 'curados';
+let ALL_EXAMPLES;
+if (SOURCE === 'db') {
+  const { getDb } = await import('../dist/db/schema.js');
+  const rows = getDb().prepare('SELECT id, title, provider, tags, content, validated FROM examples').all();
+  ALL_EXAMPLES = rows.map(r => {
+    const c = JSON.parse(r.content);
+    return {
+      id: r.id, title: r.title, provider: r.provider,
+      tags: JSON.parse(r.tags), stacks: c.stacks ?? {}, handlers: c.handlers ?? {},
+      notes: c.notes ?? [], validated: !!r.validated,
+    };
+  });
+} else {
+  ({ ALL_EXAMPLES } = await import('../dist/knowledge/index.js'));
+}
 
 // ── Scaffold temporário (mkdtemp), limpo no final ───────────────────────────
 // Pasta dedicada para o scaffolding efêmero desta execução (higiene: nunca em
@@ -340,7 +357,8 @@ function coverageReport() {
 const results = []; // { id, title, provider, rows: { invId: {status, detail} } }
 
 for (const ex of ALL_EXAMPLES) {
-  const provider = ex.tags.includes('azure') ? 'azure' : 'aws';
+  const provider = ex.provider ?? (ex.tags.includes('azure') ? 'azure' : 'aws');
+  if (provider !== 'aws' && provider !== 'azure') continue; // gcp/multi fora do escopo do diagnóstico
   resetProject();
   writeFiles(PROJECT_DIR, ex.stacks);
   writeFiles(PROJECT_DIR, ex.handlers);
@@ -364,7 +382,7 @@ for (const ex of ALL_EXAMPLES) {
 
 const invIds = INVARIANTS.map(i => i.id);
 const col = (s, w) => String(s).padEnd(w).slice(0, w);
-console.log(`\n=== Harness de contrato — ${ALL_EXAMPLES.length} exemplos curados × ${invIds.length} invariantes ===\n`);
+console.log(`\n=== Harness de contrato — ${results.length} exemplos (fonte: ${SOURCE}) × ${invIds.length} invariantes ===\n`);
 
 const idW = Math.max(...results.map(r => r.id.length), 'exemplo'.length) + 1;
 console.log(col('exemplo', idW) + invIds.map(i => col(i, 22)).join(''));
@@ -372,20 +390,43 @@ for (const r of results) {
   console.log(col(r.id, idW) + invIds.map(i => col(r.rows[i].status, 22)).join(''));
 }
 
-console.log('\n--- Falhas (detalhe) ---');
-let failCount = 0;
+console.log('\n--- Falhas (detalhe, até 30) ---');
+let failCount = 0, shown = 0;
 for (const r of results) {
   for (const invId of invIds) {
     const row = r.rows[invId];
     if (row.status === 'FAIL') {
       failCount++;
-      console.log(`FAIL ${r.id} / ${invId}: ${row.detail}`);
+      if (shown++ < 30) console.log(`FAIL ${r.id} / ${invId}: ${row.detail}`);
     }
   }
 }
 if (failCount === 0) console.log('(nenhuma)');
+else if (failCount > 30) console.log(`... +${failCount - 30} falha(s) a mais`);
 
-console.log(`\n${results.length} exemplos, ${failCount} falha(s) de invariante.`);
+console.log('\n--- Falhas por invariante (fail/aplicável) ---');
+for (const invId of invIds) {
+  let fail = 0, applic = 0;
+  for (const r of results) {
+    const s = r.rows[invId].status;
+    if (s !== 'N/A') applic++;
+    if (s === 'FAIL') fail++;
+  }
+  console.log(`${col(invId, 24)} ${fail}/${applic}`);
+}
+
+const exFail = results.filter(r => invIds.some(i => r.rows[i].status === 'FAIL'));
+console.log(`\n${results.length} exemplos · ${exFail.length} com ≥1 falha · ${results.length - exFail.length} limpos · ${failCount} falha(s) totais.`);
+
+if (process.env.IACMP_CONTRACT_DUMP) {
+  const dump = results.map(r => ({
+    id: r.id, provider: r.provider,
+    synthOk: r.rows['synth-ok'].status === 'PASS',
+    reason: (r.rows['synth-ok'].detail ?? '').replace(/\s+/g, ' ').slice(0, 160),
+  }));
+  fs.writeFileSync(process.env.IACMP_CONTRACT_DUMP, JSON.stringify(dump, null, 2));
+  console.log(`\nDump escrito: ${process.env.IACMP_CONTRACT_DUMP}`);
+}
 
 coverageReport();
 
