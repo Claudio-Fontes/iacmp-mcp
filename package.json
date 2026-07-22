@@ -12,7 +12,8 @@
     "dev": "tsc --watch",
     "start": "node dist/server.js stdio",
     "test": "npm run build && node test/retrieval.test.mjs",
-    "test:integration": "npm run build && node test/validate.test.mjs"
+    "test:integration": "npm run build && node test/validate.test.mjs",
+    "test:contract": "npm run build && node test/contract-battery.mjs"
   },
   "dependencies": {
     "@iacmp/knowledge": "^2.2.1",
