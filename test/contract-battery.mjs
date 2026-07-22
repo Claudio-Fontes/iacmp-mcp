@@ -117,7 +117,8 @@ function extractLocalObjectLiterals(src) {
   return vars;
 }
 
-const RUNTIME_PROVIDED = /^(AWS_|_|LAMBDA_|NODE_ENV$|TZ$)/;
+// PORT é convenção de plataforma/framework web (app lê com default) — runtime-provided.
+const RUNTIME_PROVIDED = /^(AWS_|_|LAMBDA_|NODE_ENV$|TZ$|PORT$)/;
 
 function extractUsedEnvVars(handlersSrc) {
   const used = new Set();
@@ -295,7 +296,12 @@ const INVARIANTS = [
       for (const m of ctx.stacksSrc.matchAll(/(\w+):\s*'([^']*)'/g)) {
         const [, key, val] = m;
         if (!/PORT|HOST|URL|URI|ENDPOINT|CONNECTION/i.test(key)) continue;
-        if (/^(6379|5432|27017|3306|10000)$/.test(val) || /:\/\//.test(val)) offenders.push(`${key}='${val}'`);
+        // Porta de infra hardcoded, ou connection string de INFRA (redis://,
+        // mongodb://…). NÃO pega http(s) de app (webhook/serviço externo é
+        // config legítima — não existe construct pra dar ref()).
+        const port = /^(6379|5432|27017|3306|10000)$/.test(val);
+        const infraUri = /\b(redis|rediss|mongodb|mongodb\+srv|postgres|postgresql|mysql|amqp|amqps):\/\//i.test(val);
+        if (port || infraUri) offenders.push(`${key}='${val}'`);
       }
       if (offenders.length === 0) return { status: 'PASS' };
       return { status: 'FAIL', detail: `hardcoded (use ref()): ${offenders.join(', ')}` };
