@@ -19,6 +19,7 @@ import { cacheRedis } from './azure/cache-redis.js';
 import { postgresPrivateVnet } from './azure/postgres-private-vnet.js';
 import { staticSiteCdn } from './azure/static-site-cdn.js';
 import { containerAppsIngress } from './azure/container-apps-ingress.js';
+import { LEGACY_EXAMPLES } from './legacy/examples.js';
 
 export interface Example {
   id: string;
@@ -28,6 +29,9 @@ export interface Example {
   stacks: Record<string, string>;
   handlers: Record<string, string>;
   notes: string[];
+  /** Legados: provider/constructs vêm explícitos (não derivados das tags). */
+  provider?: string;
+  constructs?: string[];
 }
 
 export const ALL_EXAMPLES: Example[] = [
@@ -52,6 +56,8 @@ export const ALL_EXAMPLES: Example[] = [
   postgresPrivateVnet,
   staticSiteCdn,
   containerAppsIngress,
+  // 105 legados sanados (bulk do insert-batch) — fonte única versionada.
+  ...LEGACY_EXAMPLES,
 ];
 
 // BM25-lite: score por overlap de tokens entre query e tags+title+notes
