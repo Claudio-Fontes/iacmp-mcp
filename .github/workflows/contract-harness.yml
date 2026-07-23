@@ -32,7 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build iacmp (monorepo) + link global de CLI/core/knowledge
         working-directory: iacmp
@@ -44,12 +44,13 @@ jobs:
           (cd packages/knowledge && npm link)
           iacmp --version
 
-      - name: Build iacmp-mcp (com @iacmp/knowledge local linkado)
+      - name: Build iacmp-mcp (com @iacmp/knowledge local via file:)
         working-directory: iacmp-mcp
         run: |
-          npm link @iacmp/knowledge
-          npm install --no-audit --no-fund
-          npm link @iacmp/knowledge
+          # @iacmp/knowledge não é publicado no npm — aponta pro pacote local
+          # buildado (mutação só-CI, não commitada). npm install resolve local + 3rd-party.
+          npm pkg set dependencies.@iacmp/knowledge="file:../iacmp/packages/knowledge"
+          npm install --no-audit --no-fund --no-package-lock
           npm run build
 
       - name: Harness de contrato (126 exemplos, 0 falhas)
