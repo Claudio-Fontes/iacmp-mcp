@@ -82,7 +82,7 @@ destroy_project({ projectPath, provider })      → remove os recursos
 
 ## Banco de conhecimento
 
-O servidor mantém um banco SQLite em `~/.iacmp/knowledge.db` com 230+ exemplos de stacks iacmp validados em deploy real (AWS e Azure). A busca usa FTS5 com boost para exemplos validados.
+O corpus de exemplos (126 stacks iacmp, parte validada em deploy real AWS/Azure) é a **fonte única versionada** e vive no pacote [`@iacmp/knowledge`](https://github.com/Claudio-Fontes/iacmp/tree/main/packages/knowledge) do monorepo — não neste repositório. Este servidor **consome** esse corpus: no boot, `ensureSeeded()` faz upsert dos exemplos no banco SQLite `~/.iacmp/knowledge.db` (idempotente, com gate por hash) e a busca usa FTS5 com boost para exemplos validados. O mesmo banco é lido pelo `iacmp ai` (RAG) — os dois front-ends compartilham a base. Corrigir um exemplo é um commit em `@iacmp/knowledge`.
 
 ## Pré-requisitos
 
