@@ -80,59 +80,49 @@ new Fn.ApiGateway(stack, 'ItemsApi', {
 export default stack;`,
     },
     handlers: {
-        'src/createItem.ts': `import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+        'src/createItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const body = JSON.parse(event.body ?? '{}');
   const id = body.id ?? crypto.randomUUID();
-  await doc.send(new PutCommand({ TableName: process.env.TABLE_NAME, Item: { id, ...body } }));
+  await t.put({ id, ...body });
   return { statusCode: 201, body: JSON.stringify({ id, ...body }), headers: { 'Access-Control-Allow-Origin': '*' } };
 };`,
-        'src/getItem.ts': `import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+        'src/getItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? '';
-  const res = await doc.send(new GetCommand({ TableName: process.env.TABLE_NAME, Key: { id } }));
-  if (!res.Item) return { statusCode: 404, body: JSON.stringify({ error: 'Not found' }) };
-  return { statusCode: 200, body: JSON.stringify(res.Item), headers: { 'Access-Control-Allow-Origin': '*' } };
+  const item = await t.get(id);
+  if (!item) return { statusCode: 404, body: JSON.stringify({ error: 'Not found' }) };
+  return { statusCode: 200, body: JSON.stringify(item), headers: { 'Access-Control-Allow-Origin': '*' } };
 };`,
-        'src/listItems.ts': `import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+        'src/listItems.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async () => {
-  const res = await doc.send(new ScanCommand({ TableName: process.env.TABLE_NAME }));
-  return { statusCode: 200, body: JSON.stringify(res.Items ?? []), headers: { 'Access-Control-Allow-Origin': '*' } };
+  const items = await t.list();
+  return { statusCode: 200, body: JSON.stringify(items), headers: { 'Access-Control-Allow-Origin': '*' } };
 };`,
-        'src/updateItem.ts': `import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+        'src/updateItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? '';
   const body = JSON.parse(event.body ?? '{}');
-  const fields = Object.entries(body).filter(([k]) => k !== 'id');
-  const expr = 'SET ' + fields.map(([k], i) => \`#f\${i} = :v\${i}\`).join(', ');
-  const names: Record<string, string> = {};
-  const vals: Record<string, unknown> = {};
-  fields.forEach(([k, v], i) => { names[\`#f\${i}\`] = k; vals[\`:v\${i}\`] = v; });
-  await doc.send(new UpdateCommand({ TableName: process.env.TABLE_NAME, Key: { id }, UpdateExpression: expr, ExpressionAttributeNames: names, ExpressionAttributeValues: vals }));
+  await t.put({ id, ...body });
   return { statusCode: 200, body: JSON.stringify({ id, ...body }), headers: { 'Access-Control-Allow-Origin': '*' } };
 };`,
-        'src/deleteItem.ts': `import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-const doc = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+        'src/deleteItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? '';
-  await doc.send(new DeleteCommand({ TableName: process.env.TABLE_NAME, Key: { id } }));
+  await t.delete(id);
   return { statusCode: 200, body: JSON.stringify({ deleted: id }), headers: { 'Access-Control-Allow-Origin': '*' } };
 };`,
     },
     notes: [
         'Policy.IAM usa ref(TableId, "Arn") — NUNCA string "NomeTabela" nem "NomeTabela/*"',
         'Policy separada por Lambda — nunca uma única policy compartilhada',
-        'actions mapeiam 1:1 com SDK commands: PutCommand→PutItem, GetCommand→GetItem, etc.',
-        'DocumentClient (@aws-sdk/lib-dynamodb) — NUNCA client low-level do @aws-sdk/client-dynamodb',
+        'Handler usa o facade @iacmp/runtime (table()) — NUNCA @aws-sdk/client-dynamodb nem @aws-sdk/lib-dynamodb diretamente',
+        'table().put faz upsert por "id" — só serve para tabelas com partitionKey: "id" e SEM sortKey',
         'crypto.randomUUID() para id — não uuid de lib externa',
     ],
 };

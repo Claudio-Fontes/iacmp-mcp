@@ -31,20 +31,19 @@ new Policy.IAM(stack, 'ProcessFileFnPolicy', {
 export default stack;`,
   },
   handlers: {
-    'src/processFile.ts': `import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-const s3 = new S3Client({});
+    'src/processFile.ts': `import { blob } from '@iacmp/runtime';
 export const handler = async (event: any) => {
   for (const record of event.Records) {
     const bucket = record.s3.bucket.name;
     const key = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));
-    const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    const body = await obj.Body?.transformToString();
-    console.log('Processando', key, body?.slice(0, 100));
+    const obj = await blob(bucket).get(key);
+    console.log('Processando', key, obj?.body.toString().slice(0, 100));
   }
 };`,
   },
   notes: [
     'bucket e key vêm de event.Records[n].s3 — NUNCA de env var no trigger',
+    'Handler usa o facade @iacmp/runtime (blob().get) — blob(name) aceita o nome do bucket-origem vindo do evento, não precisa vir de ref()',
     'BUCKET_NAME na env var é para operações de output (write em outro bucket)',
     "environment: BUCKET_NAME usa ref('UploadsBucket', 'Name') — NUNCA o ID lógico como string literal",
     'Storage.Bucket e Fn.Lambda devem estar em stacks SEPARADAS para evitar ciclo CloudFormation',

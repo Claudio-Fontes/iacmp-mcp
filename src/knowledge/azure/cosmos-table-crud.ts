@@ -43,57 +43,52 @@ new Fn.ApiGateway(stack, 'ItemsApi', {
 export default stack;`,
   },
   handlers: {
-    'src/tableClient.ts': `import { MongoClient, Collection } from 'mongodb';
-let client: MongoClient | null = null;
-export async function getCollection(): Promise<Collection> {
-  if (!client) { client = new MongoClient(process.env.MONGO_URI!); await client.connect(); }
-  return client.db(process.env.DB_NAME).collection(process.env.TABLE_NAME!);
-}`,
-    'src/createItem.ts': `import { getCollection } from './tableClient';
+    'src/createItem.ts': `import { table } from '@iacmp/runtime';
 import { randomUUID } from 'crypto';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body ?? {});
   const id = randomUUID();
-  const col = await getCollection();
-  await col.insertOne({ id, ...body });
+  await t.put({ id, ...body });
   return { statusCode: 201, body: JSON.stringify({ id, ...body }) };
 };`,
-    'src/listItems.ts': `import { getCollection } from './tableClient';
+    'src/listItems.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async () => {
-  const col = await getCollection();
-  const items = await col.find({}).project({ _id: 0 }).toArray();
+  const items = await t.list();
   return { statusCode: 200, body: JSON.stringify(items) };
 };`,
-    'src/getItem.ts': `import { getCollection } from './tableClient';
+    'src/getItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
-  const col = await getCollection();
-  const item = await col.findOne({ id }, { projection: { _id: 0 } });
+  const item = await t.get(id);
   if (!item) return { statusCode: 404, body: JSON.stringify({ error: 'não encontrado' }) };
   return { statusCode: 200, body: JSON.stringify(item) };
 };`,
-    'src/updateItem.ts': `import { getCollection } from './tableClient';
+    'src/updateItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
   const body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body ?? {});
   const { id: _id, ...rest } = body;
-  const col = await getCollection();
-  await col.updateOne({ id }, { $set: rest }, { upsert: true });
+  await t.put({ id, ...rest });
   return { statusCode: 200, body: JSON.stringify({ id, ...rest }) };
 };`,
-    'src/deleteItem.ts': `import { getCollection } from './tableClient';
+    'src/deleteItem.ts': `import { table } from '@iacmp/runtime';
+const t = table(process.env.TABLE_NAME!);
 export const handler = async (event: any) => {
   const id = event.pathParameters?.id ?? event.path?.split('/').pop();
-  const col = await getCollection();
-  await col.deleteOne({ id });
+  await t.delete(id);
   return { statusCode: 204, body: '' };
 };`,
   },
   notes: [
-    'Azure: Database.DynamoDB vira Cosmos DB MongoDB API (kind: MongoDB) — NÃO Table API. env var ÚNICA: TABLE_NAME: ref("ItemsTable","Name") — o synth injeta MONGO_URI e DB_NAME automaticamente no Function App.',
+    'Azure: Database.DynamoDB vira Cosmos DB MongoDB API (kind: MongoDB) — NÃO Table API. env var ÚNICA: TABLE_NAME: ref("ItemsTable","Name") — o synth injeta MONGO_URI e DB_NAME automaticamente no Function App (o facade lê essas envs sozinho).',
+    'Handler usa o facade @iacmp/runtime (table()) — NUNCA mongodb/MongoClient nem @azure/data-tables diretamente',
     'stageName: "api" no ApiGateway — NUNCA "" (string vazia causa 404)',
-    'Chave de negócio é o campo "id" (string, gerado com randomUUID) — NUNCA use o _id interno do driver mongodb como chave de negócio.',
-    'findOne/deleteOne/updateOne NUNCA lançam quando o documento não existe (retornam null/matchedCount 0) — diferente da Table API, não precisa tratar 404 explicitamente.',
+    'Chave de negócio é o campo "id" (string, gerado com randomUUID) — o facade já remove o _id interno do driver mongodb do retorno.',
+    'table().get/delete NUNCA lançam quando o documento não existe (get retorna null) — não precisa tratar erro de driver.',
     'Policy.IAM NÃO é necessária no Azure para Cosmos — a connection string (MONGO_URI) já autentica',
     'NUNCA @aws-sdk/* nem @azure/data-tables/TableClient em projeto Azure',
   ],
