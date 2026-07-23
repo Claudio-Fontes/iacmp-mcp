@@ -1,0 +1,60 @@
+name: contract-harness
+
+# Gate do corpus: roda o harness de contrato (synth real de cada exemplo curado
+# + invariantes semânticas) em todo push/PR. Impede que um exemplo quebrado
+# volte a entrar na knowledge base — trava o saneamento de 2026-07-22 (126/126).
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: contract-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout iacmp-mcp
+        uses: actions/checkout@v4
+        with:
+          path: iacmp-mcp
+
+      # Repo irmão: fornece o CLI `iacmp` + @iacmp/core + @iacmp/knowledge (não
+      # publicado no npm). Ambos os repos são públicos → checkout sem token.
+      - name: Checkout iacmp (CLI + core + knowledge)
+        uses: actions/checkout@v4
+        with:
+          repository: Claudio-Fontes/iacmp
+          ref: main
+          path: iacmp
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build iacmp (monorepo) + link global de CLI/core/knowledge
+        working-directory: iacmp
+        run: |
+          npm install --no-audit --no-fund
+          npx turbo run build
+          (cd packages/cli && npm link)
+          (cd packages/core && npm link)
+          (cd packages/knowledge && npm link)
+          iacmp --version
+
+      - name: Build iacmp-mcp (com @iacmp/knowledge local linkado)
+        working-directory: iacmp-mcp
+        run: |
+          npm link @iacmp/knowledge
+          npm install --no-audit --no-fund
+          npm link @iacmp/knowledge
+          npm run build
+
+      - name: Harness de contrato (126 exemplos, 0 falhas)
+        working-directory: iacmp-mcp
+        env:
+          IACMP_LINK_LOCAL: '1'                       # scaffold usa o @iacmp/core local, não o publicado
+          IACMP_BATTERY_RUNS_DIR: ${{ runner.temp }}/harness-runs
+        run: node test/contract-battery.mjs

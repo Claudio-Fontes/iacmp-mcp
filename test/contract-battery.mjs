@@ -42,7 +42,7 @@ if (SOURCE === 'db') {
 // Pasta dedicada para o scaffolding efêmero desta execução (higiene: nunca em
 // ~/Projetos nem dentro de repos). Override via IACMP_BATTERY_RUNS_DIR.
 const RUNS_DIR = process.env.IACMP_BATTERY_RUNS_DIR
-  ?? '/private/tmp/claude-501/-Users-cmelo-Projetos-iacmp/f8e34d2a-ea76-4ea2-a355-5a29fcc3efc7/scratchpad/harness-runs';
+  ?? path.join(os.tmpdir(), 'iacmp-harness-runs');
 fs.mkdirSync(RUNS_DIR, { recursive: true });
 const SCRATCH_ROOT = fs.mkdtempSync(path.join(RUNS_DIR, 'run-'));
 const PROJECT_DIR = path.join(SCRATCH_ROOT, 'proj');
@@ -69,6 +69,15 @@ const init = run(`iacmp init ${path.basename(PROJECT_DIR)}`, SCRATCH_ROOT, 12000
 if (!init.ok) {
   console.error('BLOQUEIO: `iacmp init` falhou — não é possível rodar o harness.\n' + init.output);
   process.exit(1);
+}
+
+// CI: usa o @iacmp/core LOCAL (recém-buildado + `npm link`) no scaffold, em vez
+// do publicado no npm — senão os exemplos que dependem de fixes ainda não
+// publicados dariam falso-vermelho. Ativado só quando IACMP_LINK_LOCAL está setado.
+if (process.env.IACMP_LINK_LOCAL) {
+  const link = run('npm link @iacmp/core', PROJECT_DIR, 120000);
+  if (!link.ok) console.warn('aviso: `npm link @iacmp/core` falhou (scaffold usará o publicado):\n' + link.output);
+  else console.log('scaffold: @iacmp/core linkado do local');
 }
 
 function resetProject() {
