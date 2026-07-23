@@ -1,6 +1,6 @@
 {
   "name": "@iacmp/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for iacmp — grounded IaC generation with validated examples",
   "type": "module",
   "bin": {
@@ -17,7 +17,7 @@
     "test:contract": "npm run build && node test/contract-battery.mjs"
   },
   "dependencies": {
-    "@iacmp/knowledge": "^2.2.1",
+    "@iacmp/knowledge": "^2.3.0",
     "@modelcontextprotocol/sdk": "^1.15.0",
     "better-sqlite3": "12.11.1"
   },
